@@ -1,0 +1,4 @@
+<plugin>
+    <name>autoregister</name>
+    <classname>autoregister.plugin.RuntimePlugin</classname>
+</plugin>
