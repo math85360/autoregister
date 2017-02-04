@@ -71,7 +71,7 @@ object RegistryProxy {
 	// register(SimpleController)
 }
 
-@ExportAllDescendentObjects("to = "RegistryProxy.register")
+@ExportAllDescendentObjects(to = "RegistryProxy.register")
 trait ToRegister extends js.Object
 
 trait Controller extends ToRegister
@@ -158,18 +158,18 @@ addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.1")
 ## Limitations
 ===========
 
-All registry and objects to register must be defined in the same build.
+For the first version, all registry and objects to register must be defined in the same build.
 
 You can not have a library defining annotations with Registry and use them in your project importing this library.
 
-To bypass this limit, you can use the @RegistryAnnotation on a method defined on your own project :
+To bypass this limit, you can use the @Registry annotation on a method defined on your own project :
 
 ```scala
 import autoregister.annotations._
 
-@Registry
 object Main {
-	def register(registryName: String, any: AnyRef) : Unit {
+	@Registry
+	def register(any: AnyRef) : Unit {
 	}
 
 	def main() {
