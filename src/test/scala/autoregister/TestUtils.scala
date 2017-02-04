@@ -21,7 +21,7 @@ object TestUtils {
     else List(src)
   }
 
-  def make(path: String) = {
+  def make(path: String)(value: Map[Option[String], Set[String]]) = {
     val src = s"src/test/resources/$path"
     val sources = getFilePaths(src)
 
@@ -37,15 +37,24 @@ object TestUtils {
 
     settings.classpath.value = ClassPath.join(entries ++ sclpath: _*)
 
+    var objectRegistered = Map[Option[String], Set[String]]()
+
+    def report(key: Option[String], concretes: Set[String]) {
+      if (concretes.nonEmpty)
+        objectRegistered += key -> concretes
+    }
+
     lazy val compiler = new Global(settings, new ConsoleReporter(settings)) {
       override protected def loadRoughPluginsList(): List[Plugin] = {
-        List(new plugin.RuntimePlugin(this))
+        List(new plugin.TestPlugin(this, report))
       }
     }
 
     val run = new compiler.Run()
     run.compile(sources)
     if (vd.toList.isEmpty) throw CompilationException()
+
+    assert(value.toSeq.sortBy(_._1) == objectRegistered.toSeq.sortBy(_._1))
   }
 
   case class CompilationException() extends Exception

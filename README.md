@@ -1,5 +1,8 @@
-# autoregister
+# autoregister 0.0.2 [![Build Status][travis-badge]][travis-link]
 ===============
+
+[travis-badge]: https://travis-ci.org/math85360/autoregister.svg
+[travis-link]: https://travis-ci.org/math85360/autoregister
 
 **autoregister** is a Scala compiler plugin that finds / discovers all classes having a specific annotations and push them in a registry.
 
@@ -152,11 +155,11 @@ When you add a new controller or service, you don't need anymore to add a line i
 To use, add the following to your `build.sbt`:
 
 ```scala
-libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.1" % "provided"
+libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.2" % "provided"
 
 autoCompilerPlugins := true
 
-addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.1")
+addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.2")
 ```
 
 ## Limitations

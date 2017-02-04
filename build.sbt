@@ -3,7 +3,7 @@ organization  := "com.iz2use"
 
 name := "autoregister"
 
-version := "0.0.1"
+version := "0.0.2"
 
 scalaVersion  := "2.11.8"
 
@@ -23,11 +23,9 @@ unmanagedSourceDirectories in Test <+= baseDirectory(_ / "src" / "test" / "resou
 // Sonatype
 publishArtifact in Test := false
 
-publishArtifact := false
-
-publishTo <<= version { (v: String) =>
+/*publishTo <<= version { (v: String) =>
   Some("releases"  at "https://oss.sonatype.org/service/local/staging/deploy/maven2")
-}
+}*/
 
 pomExtra := (
   <url>https://github.com/math85360/autoregister</url>

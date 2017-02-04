@@ -26,19 +26,40 @@ class InventoryPluginPhase(
   val desRegister = typeOf[autoregister.annotations.RegisterAllDescendentObjects]
 
   class InventoryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+    implicit class RichString(s: String) {
+      private val forbiddenPrefix = Seq("akka.", "scala.", "java.", "scalajs.")
+
+      def allowed: Boolean = !forbiddenPrefix.exists(s.startsWith(_))
+    }
     def t(symbol: Symbol) {
       val name = symbol.fullNameString
       val path = symbol.associatedFile.path
       symbol.annotations collect {
         case ai @ AnnotationInfo(`register`, args, assocs) =>
-          addToRegistry(Value.ObjectToRegister(name, path, args.headOption collect { case Literal(Constant(s: String)) => s }))
-        case AnnotationInfo(`desRegister`, args, _) =>
-          addToRegistry(Value.RegisterDescendentOf(name, path, args.headOption collect { case Literal(Constant(s: String)) => s }))
+          val r = Value.ObjectToRegister(name, path, args.headOption collect {
+            case Literal(Constant(s: String)) => s
+          })
+          //unit.echo(ai.pos, r.prettyPrint)
+          addToRegistry(r)
+        case ai @ AnnotationInfo(`desRegister`, args, _) =>
+          val r = Value.RegisterSuper(name, path, args.headOption collect {
+            case Literal(Constant(s: String)) => s
+          })
+          //unit.echo(ai.pos, r.prettyPrint)
+          addToRegistry(r)
       }
       val parents =
-        symbol.parentSymbols filterNot (typeOf[Object].typeSymbol == _) map (_.fullNameString)
-      if (symbol.isModule) addToRegistry(Value.ObjectMaybeToRegister(name, path, parents))
-      else parents foreach (p => addToRegistry(Value.TraitInherits(name, path, p)))
+        symbol.parentSymbols filter (_.fullNameString.allowed) map (_.fullNameString)
+      if (parents.nonEmpty) {
+        val r = (if (symbol.isModule) {
+          Value.ConcreteObject(name, path, parents)
+        }
+        else {
+          Value.Extends(name, path, parents)
+        })
+        //unit.echo(symbol.pos, r.prettyPrint)
+        addToRegistry(r)
+      }
     }
 
     override def transform(tree: Tree): Tree = super.transform(tree) match {
