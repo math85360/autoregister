@@ -145,6 +145,10 @@ When you add a new controller or service, you don't need anymore to add a line i
 ## How to Use
 ==========
 
+**Need testing before publishing, please wait**
+
+**If you need it now, clone this project in a folder and do ```sbt publish-local```**
+
 To use, add the following to your `build.sbt`:
 
 ```scala
