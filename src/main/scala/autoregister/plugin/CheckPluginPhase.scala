@@ -27,7 +27,6 @@ class CheckPluginPhase(
   class CheckTransformer(unit: CompilationUnit, registries: Set[String]) extends TypingTransformer(unit) {
     override def transform(tree: Tree): Tree = super.transform(tree) match {
       case m @ ModuleDef(_, _, _) =>
-        //if (registries.contains(m.symbol.fullNameString)) unit.warning(tree.pos, "Sorry, can not be registered !")
         m
       case _ => tree
     }

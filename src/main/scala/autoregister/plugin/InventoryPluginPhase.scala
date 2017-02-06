@@ -16,7 +16,7 @@ class InventoryPluginPhase(
 
   val runsAfter = List("typer")
 
-  override val runsBefore = List("patmat", "autoregister:registry")
+  override val runsBefore = List("autoregister:registry")
 
   val phaseName = "autoregister:inventory"
 
@@ -28,9 +28,9 @@ class InventoryPluginPhase(
   class InventoryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     implicit class RichString(s: String) {
       private val forbiddenPrefix = Seq("akka.", "scala.", "java.", "scalajs.")
-
       def allowed: Boolean = !forbiddenPrefix.exists(s.startsWith(_))
     }
+
     def t(symbol: Symbol) {
       val name = symbol.fullNameString
       val path = symbol.associatedFile.path
@@ -39,13 +39,11 @@ class InventoryPluginPhase(
           val r = Value.ObjectToRegister(name, path, args.headOption collect {
             case Literal(Constant(s: String)) => s
           })
-          //unit.echo(ai.pos, r.prettyPrint)
           addToRegistry(r)
         case ai @ AnnotationInfo(`desRegister`, args, _) =>
           val r = Value.RegisterSuper(name, path, args.headOption collect {
             case Literal(Constant(s: String)) => s
           })
-          //unit.echo(ai.pos, r.prettyPrint)
           addToRegistry(r)
       }
       val parents =
@@ -57,7 +55,6 @@ class InventoryPluginPhase(
         else {
           Value.Extends(name, path, parents)
         })
-        //unit.echo(symbol.pos, r.prettyPrint)
         addToRegistry(r)
       }
     }

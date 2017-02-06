@@ -18,15 +18,15 @@ object AutoregisterTests extends TestSuite {
       'samefile{
         implicit val t = "success.samefile"
         'simple - st("simple", "Simple.scala", "B")
-        /*'descendent - st("descendent", "Descendent.scala", "B")
-        'secondlevel - st("secondlevel", "SecondLevel.scala", "C")*/
+        'descendent - st("descendent", "Descendent.scala", "B")
+        'secondlevel - st("secondlevel", "SecondLevel.scala", "C")
       }
-      /*'independent{
+      'independent{
         implicit val t = "success.independent"
         'simple - st("simple", "", "B")
         'descendent - st("descendent", "", "B")
         'secondlevel - st("secondlevel", "", "C")
-      }*/
+      }
     }
   }
 }
