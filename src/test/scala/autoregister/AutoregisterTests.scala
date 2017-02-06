@@ -5,16 +5,24 @@ import TestUtils.make
 
 object AutoregisterTests extends TestSuite {
   def tests = TestSuite {
-    def st(_pkg: String, f: String, items: String*)(implicit toplevel: String) = {
-      val pkg = (Option(toplevel).toSeq :+ _pkg) mkString "."
-      make(if (f.isEmpty()) pkg.replace('.', '/') + "/" else (Option(toplevel.replace('.', '/')).toSeq :+ f) mkString "/") {
-        (items map { item =>
-          Option(s"$pkg.A.register") -> s"$pkg.$item"
-        }) groupBy (_._1) mapValues (_.map(_._2).toSet) toMap
-      }
-    }
 
     'success{
+      def s(_pkg: String, file: String)(items: Map[Option[String], Set[String]])(implicit toplevel: String) = {
+        val pkg = s"$toplevel.${_pkg}"
+        make(file match {
+          case _ if file.isEmpty() => pkg.replace('.', '/') + "/"
+          case _                   => toplevel.replace('.', '/') + "/" + file
+        })(items mapValues (_.map(toplevel + "." + _)))
+        //else (Option(toplevel.replace('.', '/')).toSeq :+ f) mkString "/")
+      }
+      def st(pkg: String, f: String, items: String*)(implicit toplevel: String) = {
+        s(pkg, f) {
+          (items map { item =>
+            Option(s"$toplevel.$pkg.A.register") -> s"$pkg.$item"
+          }) groupBy (_._1) mapValues (_.map(_._2).toSet) toMap
+        }
+      }
+
       'samefile{
         implicit val t = "success.samefile"
         'simple - st("simple", "Simple.scala", "B")
@@ -26,6 +34,10 @@ object AutoregisterTests extends TestSuite {
         'simple - st("simple", "", "B")
         'descendent - st("descendent", "", "B")
         'secondlevel - st("secondlevel", "", "C")
+      }
+      'globalregistry{
+        implicit val t = "success"
+        'global - s("globalregistry", "") { Map(None -> Set("globalregistry.C")) }
       }
     }
   }

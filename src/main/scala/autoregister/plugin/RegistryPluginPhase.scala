@@ -45,44 +45,36 @@ class RegistryPluginPhase(
 
     override def transform(tree: Tree): Tree = tree match {
       case m @ ModuleDef(_, _, _) =>
-        val updatedBody = m.impl.body.map {
-          case b @ DefDef(_, _, _, _, _, rhs) =>
-            m.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol) match {
-              case None => b
-              case Some(_) =>
-                reporter(None, registries(None))
-                fromRegistry(m) { registries(None).map(s => b.symbol.decodedName -> s) } match {
-                  case Some(registers) =>
-                    b.rhs match {
-                      case Block(stats, expr) =>
-                        treeCopy.Block(b, stats ++ registers, expr)
-                      case expr @ Literal(_) =>
-                        treeCopy.Block(b, List() ++ registers, expr)
-                    }
-                  case None =>
-                    b
-                }
-            }
-          case x => x
-        }
         val r = (fromRegistry(m) {
           m.impl.body flatMap {
-            case d @ DefDef(_, _, _, _, _, _) =>
-              val key = Some(d.symbol.fullNameString)
-              reporter(key, registries(key))
-              registries(key).map(s => "register" -> s)
+            case d @ DefDef(_, tname, _, _, _, _) =>
+              def process(key: Option[String]) = {
+                reporter(key, registries(key))
+                registries(key).map(s => tname.decoded -> s)
+              }
+              val registryAnnot = m.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol).toSeq.flatMap { annot =>
+                process(annot.args.headOption collect {
+                  case Literal(Constant(key: String)) => key
+                })
+              }
+              val registryOpt = if (tname.decoded == "register") {
+                process(None)
+              }
+              else {
+                Set()
+              }
+              val meth = process(Some(s"${m.symbol.fullNameString}.${tname.decoded}"))
+              (meth ++ registryAnnot ++ registryOpt)
             case _ =>
               Nil
           } toSet
         } match {
           case Some(registers) if registers.nonEmpty =>
             treeCopy.ModuleDef(m, m.mods, m.name,
-              treeCopy.Template(m.impl, m.impl.parents, m.impl.self, updatedBody ++ registers))
+              treeCopy.Template(m.impl, m.impl.parents, m.impl.self, m.impl.body ++ registers))
           case _ =>
-            treeCopy.ModuleDef(m, m.mods, m.name,
-              treeCopy.Template(m.impl, m.impl.parents, m.impl.self, updatedBody))
+            m
         })
-        //println(r)
         super.transform(r)
       case _ => super.transform(tree)
     }
