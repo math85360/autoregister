@@ -4,6 +4,7 @@ import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.{ Global, Phase }
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.transform.Transform
+import Utils._
 
 class InventoryPluginPhase(
   val global:    Global,
@@ -59,12 +60,37 @@ class InventoryPluginPhase(
       }
     }
 
+    def getParents(child: Symbol) = child.parentSymbols
+
+    def t2(symbol: Symbol) {
+      val name = symbol.fullNameString
+      val path = symbol.associatedFile.path
+      symbol.treeCollectFirst(
+        getParents(_),
+        (_: Symbol).getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
+      ) match {
+          case None =>
+          case Some((a, s)) =>
+            val r = Value.ObjectToRegister(name, path, s.args.headOption collect {
+              case Literal(Constant(s: String)) => s
+            })
+            addToRegistry(r)
+        }
+      symbol.annotations collect {
+        case ai @ AnnotationInfo(`register`, args, assocs) =>
+          val r = Value.ObjectToRegister(name, path, args.headOption collect {
+            case Literal(Constant(s: String)) => s
+          })
+          addToRegistry(r)
+      }
+    }
+
     override def transform(tree: Tree): Tree = super.transform(tree) match {
-      case m @ ClassDef(_, _, _, _) =>
-        t(m.symbol)
-        m
+      /*case m @ ClassDef(_, _, _, _) =>
+        t2(m.symbol)
+        m*/
       case m @ ModuleDef(_, _, _) =>
-        t(m.symbol)
+        t2(m.symbol)
         m
       case _ => tree
     }

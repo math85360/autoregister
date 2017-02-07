@@ -5,6 +5,8 @@ import scala.tools.nsc.{ Global, Phase }
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.ast.TreeDSL
+import scala.annotation.tailrec
+import Utils._
 
 class RegistryPluginPhase(
   val global: Global,
@@ -38,7 +40,27 @@ class RegistryPluginPhase(
           val app = getRequiredModule(s._2)
           val owner = m.symbol.tpe.typeSymbol
           val method = m.symbol.tpe.member(TermName(s._1))
-          localTyper.typed { Apply(This(owner) DOT method, List(Ident(app))) }
+          val mod = localTyper.typed { Ident(app) }
+          mod.symbol.treeCollectFirst(
+            (_: Symbol).parentSymbols,
+            (_: Symbol).getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
+          ) match {
+              case None =>
+                localTyper.typed {
+                  Apply(This(owner) DOT method, List(Ident(app)))
+                }
+              case Some((s, a)) =>
+                val module = Ident(app)
+                val moduleArg = if (method.typeParams.length == 1) {
+                  Typed(module, Ident(getRequiredClass(s.fullNameString)))
+                }
+                else {
+                  module
+                }
+                localTyper.typed {
+                  Apply(This(owner) DOT method, List(moduleArg))
+                }
+            }
         }
         Some(registers)
     }
@@ -46,6 +68,21 @@ class RegistryPluginPhase(
     override def transform(tree: Tree): Tree = tree match {
       case m @ ModuleDef(_, _, _) =>
         val r = (fromRegistry(m) {
+          /* When we've an object extending a class that have a register method
+           * or an Registry annotation, we must call this method even if defined
+           * in his ancestors
+          println {
+            val o =
+              m.impl.treeFlatMap((_: Template).parents.collect {
+                case cls: ClassDef  => cls.symbol.implClass
+              }, (_: Template).body.collect({
+                case d @ DefDef(_, tname, _, _, _, _) if tname.decoded == "register" || d.symbol.hasAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol) =>
+                  //d.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol)
+                  d.symbol.fullNameString
+                case x => x.symbol.fullNameString
+              }))
+            o
+          }*/
           m.impl.body flatMap {
             case d @ DefDef(_, tname, _, _, _, _) =>
               def process(key: Option[String]) = {

@@ -37,8 +37,16 @@ object AutoregisterTests extends TestSuite {
       }
       'globalregistry{
         implicit val t = "success"
-        'global - s("globalregistry", "") { Map(None -> Set("globalregistry.C")) }
+        s("globalregistry", "") { Map(None -> Set("globalregistry.C")) }
       }
+      'withimplicits{
+        implicit val t = "success"
+        s("withimplicits", "") { Map(None -> Set("withimplicits.ToRegister")) }
+      }
+      /*'inheritedregistry{
+        implicit val t = "success"
+        s("inheritedregistry", "") { Map(None -> Set("inheritedregistry.A.register")) }
+      }*/
     }
   }
 }
