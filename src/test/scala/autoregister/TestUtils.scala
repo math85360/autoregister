@@ -46,7 +46,7 @@ object TestUtils {
 
     lazy val compiler = new Global(settings, new ConsoleReporter(settings)) {
       override protected def loadRoughPluginsList(): List[Plugin] = {
-        List(new plugin.TestPlugin(this, report))
+        List(new plugin.TestPlugin(this, plugin.Registry(), report))
       }
     }
 

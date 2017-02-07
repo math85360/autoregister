@@ -4,3 +4,4 @@
 **/.project
 **/.ensime
 .ensime_cache/
+**/.cache*

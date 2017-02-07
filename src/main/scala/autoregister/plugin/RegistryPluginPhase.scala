@@ -30,36 +30,39 @@ class RegistryPluginPhase(
   }
 
   class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[String]]) extends TypingTransformer(unit) {
+
+    def mkRegisterMethodCall(owner: Symbol, registerMethod: Symbol, moduleToRegister: ModuleSymbol, moduleInheritedType: Option[Symbol]) = {
+      import rootMirror.{ getRequiredModule }
+      import CODE._
+      val module = Ident(moduleToRegister)
+      localTyper.typed {
+        Apply(This(owner) DOT registerMethod, List(module))
+      }
+    }
+
     def fromRegistry(m: ModuleDef)(registryOpt: Set[(String, String)]) = registryOpt match {
       case s if s.isEmpty => None
       case registry =>
         registry foreach { s => dones(s._2) }
         val registers = registry map { s =>
-          import rootMirror.{ getModuleByName, getPackage, getClassByName, getRequiredClass, getRequiredModule, getClassIfDefined, getModuleIfDefined, getPackageObject, getPackageIfDefined, getPackageObjectIfDefined, requiredClass, requiredModule }
+          import rootMirror.{ getRequiredModule }
           import CODE._
-          val app = getRequiredModule(s._2)
+          val moduleToRegister = getRequiredModule(s._2)
           val owner = m.symbol.tpe.typeSymbol
-          val method = m.symbol.tpe.member(TermName(s._1))
-          val mod = localTyper.typed { Ident(app) }
+          val registerMethod = m.symbol.tpe.member(TermName(s._1))
+          val mod = localTyper.typed { Ident(moduleToRegister) }
+          mod.symbol.ancestors flatMap { ancestor =>
+            val annot = ancestor.getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
+            annot map { annot => ancestor -> annot }
+          }
           mod.symbol.treeCollectFirst(
             (_: Symbol).parentSymbols,
             (_: Symbol).getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
           ) match {
               case None =>
-                localTyper.typed {
-                  Apply(This(owner) DOT method, List(Ident(app)))
-                }
+                mkRegisterMethodCall(owner, registerMethod, moduleToRegister, None)
               case Some((s, a)) =>
-                val module = Ident(app)
-                val moduleArg = if (method.typeParams.length == 1) {
-                  Typed(module, Ident(getRequiredClass(s.fullNameString)))
-                }
-                else {
-                  module
-                }
-                localTyper.typed {
-                  Apply(This(owner) DOT method, List(moduleArg))
-                }
+                mkRegisterMethodCall(owner, registerMethod, moduleToRegister, Some(s))
             }
         }
         Some(registers)

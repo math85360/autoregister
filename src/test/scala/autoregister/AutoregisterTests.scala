@@ -8,7 +8,7 @@ object AutoregisterTests extends TestSuite {
 
     'success{
       def s(_pkg: String, file: String)(items: Map[Option[String], Set[String]])(implicit toplevel: String) = {
-        val pkg = s"$toplevel.${_pkg}"
+        val pkg = (if (toplevel.nonEmpty && _pkg.nonEmpty) s"$toplevel.${_pkg}" else s"$toplevel${_pkg}")
         make(file match {
           case _ if file.isEmpty() => pkg.replace('.', '/') + "/"
           case _                   => toplevel.replace('.', '/') + "/" + file
@@ -35,17 +35,21 @@ object AutoregisterTests extends TestSuite {
         'descendent - st("descendent", "", "B")
         'secondlevel - st("secondlevel", "", "C")
       }
+      'generics{
+        implicit val t = "success.generics"
+        s("", "") { Map(None -> Set("C")) }
+      }
       'globalregistry{
-        implicit val t = "success"
-        s("globalregistry", "") { Map(None -> Set("globalregistry.C")) }
+        implicit val t = "success.globalregistry"
+        s("", "") { Map(None -> Set("C")) }
       }
       'withimplicits{
-        implicit val t = "success"
-        s("withimplicits", "") { Map(None -> Set("withimplicits.ToRegister")) }
+        implicit val t = "success.withimplicits"
+        s("", "") { Map(None -> Set("ToRegister")) }
       }
       /*'inheritedregistry{
-        implicit val t = "success"
-        s("inheritedregistry", "") { Map(None -> Set("inheritedregistry.A.register")) }
+        implicit val t = "success.inheritedregistry"
+        s("", "") { Map(None -> Set("A.register")) }
       }*/
     }
   }

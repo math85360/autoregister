@@ -60,22 +60,23 @@ class InventoryPluginPhase(
       }
     }
 
-    def getParents(child: Symbol) = child.parentSymbols
+    def getParents(child: Symbol) = {
+      val r = child.parentSymbols.filter(_.fullNameString.allowed)
+      // println(child.fullNameString + " : " + r.mkString(","))
+      r
+    }
 
     def t2(symbol: Symbol) {
       val name = symbol.fullNameString
       val path = symbol.associatedFile.path
-      symbol.treeCollectFirst(
-        getParents(_),
-        (_: Symbol).getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
-      ) match {
-          case None =>
-          case Some((a, s)) =>
-            val r = Value.ObjectToRegister(name, path, s.args.headOption collect {
-              case Literal(Constant(s: String)) => s
-            })
-            addToRegistry(r)
+      symbol.ancestors foreach { ancestor =>
+        ancestor.getAnnotation(desRegister.typeSymbol) foreach { annot =>
+          val r = Value.ObjectToRegister(name, path, annot.args.headOption collect {
+            case Literal(Constant(s: String)) => s
+          })
+          addToRegistry(r)
         }
+      }
       symbol.annotations collect {
         case ai @ AnnotationInfo(`register`, args, assocs) =>
           val r = Value.ObjectToRegister(name, path, args.headOption collect {
