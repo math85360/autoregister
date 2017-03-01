@@ -13,7 +13,7 @@ class RuntimePlugin(global: Global) extends TestPlugin(global, RuntimeSettings.r
   // Bad workaround
   // TODO Better implementation to serialize & deserialize registry content for incremental compilation
   override def init(options: List[String], error: String => Unit): Boolean = {
-    registry.load(".cache_autoregister")
+    registry.load("target/.cache_autoregister")
     super.init(options, error)
   }
 }

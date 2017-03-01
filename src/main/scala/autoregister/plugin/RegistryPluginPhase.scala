@@ -29,63 +29,59 @@ class RegistryPluginPhase(
     new RegistryTransformer(unit, regs().withDefaultValue(Set.empty))
   }
 
+  sealed trait CallRegisterable[T] {
+    def transform(in: T, registeringType: Option[Tree]): Tree
+  }
+
+  object CallRegisterable {
+    implicit object ObjectCallRegisterable extends CallRegisterable[ModuleSymbol] {
+      def transform(in: ModuleSymbol, registeringType: Option[Tree]) = Ident(in)
+    }
+    implicit object ClassCallRegisterable extends CallRegisterable[ClassSymbol] {
+      def transform(in: ClassSymbol, registeringType: Option[Tree]) = TypeApply(Ident(TermName("classOf")), List(Ident(in)))
+    }
+  }
+
   class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[String]]) extends TypingTransformer(unit) {
 
-    def mkRegisterMethodCall(owner: Symbol, registerMethod: Symbol, moduleToRegister: ModuleSymbol, moduleInheritedType: Option[Symbol]) = {
-      import rootMirror.{ getRequiredModule }
+    def mkRegisterMethodCall[T: CallRegisterable](owner: Symbol, registerMethod: Symbol, tpe: Option[Tree], toRegister: T) = {
       import CODE._
-      val module = Ident(moduleToRegister)
+      val module = implicitly[CallRegisterable[T]].transform(toRegister, tpe)
       localTyper.typed {
         Apply(This(owner) DOT registerMethod, List(module))
       }
     }
 
-    def fromRegistry(m: ModuleDef)(registryOpt: Set[(String, String)]) = registryOpt match {
-      case s if s.isEmpty => None
-      case registry =>
-        registry foreach { s => dones(s._2) }
-        val registers = registry map { s =>
-          import rootMirror.{ getRequiredModule }
-          import CODE._
-          val moduleToRegister = getRequiredModule(s._2)
-          val owner = m.symbol.tpe.typeSymbol
-          val registerMethod = m.symbol.tpe.member(TermName(s._1))
-          val mod = localTyper.typed { Ident(moduleToRegister) }
-          mod.symbol.ancestors flatMap { ancestor =>
-            val annot = ancestor.getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
-            annot map { annot => ancestor -> annot }
-          }
-          mod.symbol.treeCollectFirst(
-            (_: Symbol).parentSymbols,
-            (_: Symbol).getAnnotation(typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol)
-          ) match {
-              case None =>
-                mkRegisterMethodCall(owner, registerMethod, moduleToRegister, None)
-              case Some((s, a)) =>
-                mkRegisterMethodCall(owner, registerMethod, moduleToRegister, Some(s))
-            }
-        }
-        Some(registers)
+    def fromRegistry(m: ModuleDef)(registry: Set[(String, String)]) = if (registry.isEmpty) None
+    else {
+      registry foreach { s => dones(s._2) }
+      val registers =
+        (for {
+          s <- registry
+          owner = m.symbol.tpe.typeSymbol
+          registerMethod = m.symbol.tpe.member(TermName(s._1))
+          member <- m.impl.body
+          DefDef(_, tname, _, List(List(ValDef(_, _, tpe: TypeTree, _)), _*), _, _) <- member
+          if tname.decoded == s._1
+        } yield (for {
+          AppliedTypeTree(mainTpe, _) <- tpe.original
+          if mainTpe.symbol.decodedName == "Class"
+        } yield {
+          val classToRegister = rootMirror.getRequiredClass(s._2)
+          mkRegisterMethodCall(owner, registerMethod, Some(mainTpe), classToRegister)
+        }) match {
+          case List(register) =>
+            register
+          case List() =>
+            val moduleToRegister = rootMirror.getRequiredModule(s._2)
+            mkRegisterMethodCall(owner, registerMethod, None, moduleToRegister)
+        })
+      Some(registers)
     }
 
     override def transform(tree: Tree): Tree = tree match {
       case m @ ModuleDef(_, _, _) =>
         val r = (fromRegistry(m) {
-          /* When we've an object extending a class that have a register method
-           * or an Registry annotation, we must call this method even if defined
-           * in his ancestors
-          println {
-            val o =
-              m.impl.treeFlatMap((_: Template).parents.collect {
-                case cls: ClassDef  => cls.symbol.implClass
-              }, (_: Template).body.collect({
-                case d @ DefDef(_, tname, _, _, _, _) if tname.decoded == "register" || d.symbol.hasAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol) =>
-                  //d.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol)
-                  d.symbol.fullNameString
-                case x => x.symbol.fullNameString
-              }))
-            o
-          }*/
           m.impl.body flatMap {
             case d @ DefDef(_, tname, _, _, _, _) =>
               def process(key: Option[String]) = {

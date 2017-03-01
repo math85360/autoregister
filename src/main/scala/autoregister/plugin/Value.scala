@@ -16,12 +16,23 @@ sealed trait Value {
   def prettyPrint: String
 }
 
+sealed trait RegisterValue extends Value {
+  def name: String
+  def registerTo: Option[String]
+}
+
 object Value {
   case class ObjectToRegister(name: String, path: String, registerTo: Option[String]) extends Value {
     override def prettyPrint = s"object $name will register to $registerTo [in file $path]"
   }
-  case class RegisterSuper(name: String, path: String, registerTo: Option[String]) extends Value {
+  case class ConcreteClassToRegister(name: String, path: String, registerTo: Option[String]) extends Value {
+    override def prettyPrint = s"class $name will register to $registerTo [in file $path]"
+  }
+  case class RegisterObjects(override val name: String, path: String, override val registerTo: Option[String]) extends RegisterValue {
     override def prettyPrint = s"object descending from $name will register to $registerTo [in file $path]"
+  }
+  case class RegisterConcreteClasses(override val name: String, path: String, override val registerTo: Option[String]) extends RegisterValue {
+    override def prettyPrint = s"final class descending from $name will register to $registerTo [in file $path]"
   }
   case class Extends(name: String, path: String, parents: List[String]) extends Value {
     override def prettyPrint = s"trait/class $name descending from $parents"
@@ -37,7 +48,7 @@ object Registry {
 
 case class Data(
   private[plugin] var registries:        Seq[(Option[String], String)]          = Seq(),
-  private[plugin] var registeredSuper:   Seq[Value.RegisterSuper]               = Seq(),
+  private[plugin] var registeredSuper:   Seq[RegisterValue]                     = Seq(),
   private[plugin] var extended:          Map[String, Seq[Value.Extends]]        = Map().withDefaultValue(Seq()),
   private[plugin] var concreteObjects:   Map[String, Seq[Value.ConcreteObject]] = Map().withDefaultValue(Seq()),
   private[plugin] var registeredObjects: Set[String]                            = Set()
@@ -79,10 +90,11 @@ case class Registry() {
   }
 
   def +=(entry: Value): Unit = entry match {
-    case e @ Value.ObjectToRegister(name, _, registerTo) => data.registries :+= registerTo -> name
-    case e @ Value.RegisterSuper(_, _, _)                => data.registeredSuper :+= e
-    case e @ Value.Extends(_, _, parents)                => parents foreach (name => data.extended += name -> (data.extended(name) :+ e))
-    case e @ Value.ConcreteObject(_, _, parents)         => parents foreach (name => data.concreteObjects += name -> (data.concreteObjects(name) :+ e))
+    case e @ Value.ObjectToRegister(name, _, registerTo)        => data.registries :+= registerTo -> name
+    case e @ Value.ConcreteClassToRegister(name, _, registerTo) => data.registries :+= registerTo -> name
+    case e: RegisterValue                                       => data.registeredSuper :+= e
+    case e @ Value.Extends(_, _, parents)                       => parents foreach (name => data.extended += name -> (data.extended(name) :+ e))
+    case e @ Value.ConcreteObject(_, _, parents)                => parents foreach (name => data.concreteObjects += name -> (data.concreteObjects(name) :+ e))
   }
   lazy val result: Map[Option[String], Set[String]] = {
     val r = (for {

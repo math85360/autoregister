@@ -1,4 +1,4 @@
-# autoregister 0.0.2 [![Build Status][travis-badge]][travis-link]
+# autoregister 0.0.3 [![Build Status][travis-badge]][travis-link]
 ===============
 
 [travis-badge]: https://travis-ci.org/math85360/autoregister.svg
@@ -148,18 +148,14 @@ When you add a new controller or service, you don't need anymore to add a line i
 ## How to Use
 ==========
 
-**Need testing before publishing, please wait**
-
-**If you need it now, clone this project in a folder and do ```sbt publish-local```**
-
 To use, add the following to your `build.sbt`:
 
 ```scala
-libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.2" % "provided"
+libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.3" % "provided"
 
 autoCompilerPlugins := true
 
-addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.2")
+addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.3")
 ```
 
 ## Limitations
