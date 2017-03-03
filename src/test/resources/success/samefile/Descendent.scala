@@ -10,3 +10,7 @@ object A {
 trait A
 
 object B extends A
+
+class C {
+  object D extends A
+}

@@ -9,3 +9,8 @@ object A {
 
 @Register("success.samefile.simple.A.register")
 object B
+
+class C {
+  @Register("success.samefile.simple.A.register")
+  object D
+}

@@ -31,11 +31,14 @@ object F {
   implicit object FRegistrable extends Registrable[F]
 }
 
+class G {
+  class H extends B
+}
+
 object A {
   @Registry
   def register[R: Registrable](cls: Class[R]) {
     val x = implicitly[Registrable[R]]
-    cls.newInstance()
   }
 
   register(classOf[C])

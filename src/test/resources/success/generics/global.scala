@@ -9,6 +9,10 @@ class B[W <: String, X, Y, Z] extends A[W, X]
 
 object C extends B[String, Int, Double, AnyRef]
 
+class D {
+  object E extends B[String, Int, Double, AnyRef]
+}
+
 trait Registerable[T]
 
 trait LowPriority {

@@ -23,9 +23,10 @@ class InventoryPluginPhase(
 
   override def newTransformer(unit: CompilationUnit) = new InventoryTransformer(unit)
 
-  val register = typeOf[autoregister.annotations.Register]
-  val objRegister = typeOf[autoregister.annotations.RegisterAllDescendentObjects]
-  val clsRegister = typeOf[autoregister.annotations.RegisterAllDescendentConcreteClasses]
+  val register = typeOf[autoregister.annotations.Register].typeSymbol
+  val objRegister = typeOf[autoregister.annotations.RegisterAllDescendentObjects].typeSymbol
+  val clsRegister = typeOf[autoregister.annotations.RegisterAllDescendentConcreteClasses].typeSymbol
+  val cClsRegister = typeOf[autoregister.annotations.RegisterAllDescendentCaseClasses].typeSymbol
 
   class InventoryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     implicit class RichString(s: String) {
@@ -38,46 +39,62 @@ class InventoryPluginPhase(
       r
     }
 
-    def t2(symbol: Symbol) {
+    def process(symbol: Symbol) {
       val name = symbol.fullNameString
       val path = symbol.associatedFile.path
-      if (symbol.isModule) {
-        symbol.ancestors foreach { ancestor =>
-          ancestor.getAnnotation(objRegister.typeSymbol) foreach { annot =>
-            val r = Value.ObjectToRegister(name, path, annot.args.headOption collect {
-              case Literal(Constant(s: String)) => s
-            })
-            addToRegistry(r)
-          }
-        }
-      }
-      else {
-        symbol.ancestors foreach { ancestor =>
-          ancestor.getAnnotation(clsRegister.typeSymbol) foreach { annot =>
-            val r = Value.ConcreteClassToRegister(name, path, annot.args.headOption collect {
-              case Literal(Constant(s: String)) => s
-            })
-            addToRegistry(r)
-          }
-        }
-      }
-      symbol.annotations collect {
-        case ai @ AnnotationInfo(`register`, args, assocs) =>
-          val r = Value.ObjectToRegister(name, path, args.headOption collect {
+      /**
+       * Add Value.ToRegister object for each annotation found in lst
+       */
+      def reg(lst: Symbol => List[Symbol], annotations: (Symbol, RegisteringType)*) {
+        for {
+          ancestor <- lst(symbol)
+          (annotation, rtpe) <- annotations
+          annot <- ancestor.getAnnotation(annotation)
+        } {
+          val r = Value.ToRegister(rtpe, name, path, annot.args.headOption collect {
             case Literal(Constant(s: String)) => s
           })
           addToRegistry(r)
+        }
       }
+      if (symbol.isModule) {
+        reg(_.ancestors, objRegister -> RegisteringType.Object)
+      }
+      else {
+        reg(_.ancestors, clsRegister -> RegisteringType.ConcreteClass, cClsRegister -> RegisteringType.CaseClass)
+      }
+      reg(_ :: Nil, register -> RegisteringType.Object)
     }
 
-    override def transform(tree: Tree): Tree = super.transform(tree) match {
-      case m @ ClassDef(_, _, _, _) if m.symbol.isConcreteClass =>
-        t2(m.symbol)
-        m
+    override def transform(tree: Tree): Tree = tree match {
+      case m @ ClassDef(_, _, _, _) =>
+        if (m.symbol.isConcreteClass) process(m.symbol)
+        else {}
+        /**
+         * Don't process any objects or classes inside classes.
+         * They need outer class to be instantiated before.
+         */
+        tree
       case m @ ModuleDef(_, _, _) =>
-        t2(m.symbol)
-        m
-      case _ => tree
+        process(m.symbol)
+        /**
+         * Process any objects or classes inside objects.
+         * Because they are instantiables directly.
+         */
+        super.transform(tree)
+      case _@ PackageDef(_, _) =>
+        /**
+         * Process any packages
+         */
+        super.transform(tree)
+      case _@ Template(_, _, _) =>
+        super.transform(tree)
+      case _ =>
+        /**
+         * Don't process other items because they are implementation or any
+         * other codes
+         */
+        tree
     }
   }
 

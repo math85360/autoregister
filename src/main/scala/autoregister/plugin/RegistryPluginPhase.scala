@@ -10,7 +10,7 @@ import Utils._
 
 class RegistryPluginPhase(
   val global: Global,
-  regs:       () => Map[Option[String], Set[String]],
+  regs:       () => Map[Option[String], Set[Value.ToRegister]],
   dones:      String => Unit,
   reporter:   (Option[String], Set[String]) => Unit
 )
@@ -26,55 +26,93 @@ class RegistryPluginPhase(
   val phaseName = "autoregister:registry"
 
   override def newTransformer(unit: CompilationUnit) = {
-    new RegistryTransformer(unit, regs().withDefaultValue(Set.empty))
+    new RegistryTransformer(unit, regs())
   }
 
-  sealed trait CallRegisterable[T] {
-    def transform(in: T, registeringType: Option[Tree]): Tree
-  }
+  class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[Value.ToRegister]]) extends TypingTransformer(unit) {
 
-  object CallRegisterable {
-    implicit object ObjectCallRegisterable extends CallRegisterable[ModuleSymbol] {
-      def transform(in: ModuleSymbol, registeringType: Option[Tree]) = Ident(in)
-    }
-    implicit object ClassCallRegisterable extends CallRegisterable[ClassSymbol] {
-      def transform(in: ClassSymbol, registeringType: Option[Tree]) = TypeApply(Ident(TermName("classOf")), List(Ident(in)))
-    }
-  }
-
-  class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[String]]) extends TypingTransformer(unit) {
-
-    def mkRegisterMethodCall[T: CallRegisterable](owner: Symbol, registerMethod: Symbol, tpe: Option[Tree], toRegister: T) = {
-      import CODE._
-      val module = implicitly[CallRegisterable[T]].transform(toRegister, tpe)
-      localTyper.typed {
-        Apply(This(owner) DOT registerMethod, List(module))
-      }
+    sealed trait CallRegisterable[T] {
+      def transform(in: T, registeringType: Option[Tree]): Tree
     }
 
-    def fromRegistry(m: ModuleDef)(registry: Set[(String, String)]) = if (registry.isEmpty) None
+    def prettyPrint(s: String): String = {
+      @tailrec
+      def loop(i: Int, done: String, nl: Boolean)(implicit tabs: Int): String =
+        if (i >= s.length) done
+        else {
+          val start = if (nl) done + "\n" + "  " * tabs else done
+          def eolc(cnt: Int = 0) = "\n" + "  " * (tabs + cnt)
+          def eol = eolc()
+          s.charAt(i) match {
+            case '(' =>
+              s.indexWhere(c => "(,)".contains(c), i + 1) match {
+                case x if x != -1 && s.charAt(x) == ')' => loop(i + 1, s"$start(", false)(tabs + 1)
+                case _                                  => loop(i + 1, s"$start(", true)(tabs + 1)
+              }
+            case ')'  => loop(i + 1, s"$start)", true)(tabs - 1)
+            case ','  => loop(i + 1, s"$done,", true)
+            case '\n' => loop(i + 1, s"$start", true)
+            case ' '  => loop(i + 1, start, false)
+            case x    => loop(i + 1, s"$start$x", false)
+          }
+        }
+      loop(0, "", false)(0)
+    }
+
+    object OriginalTypeTree {
+      def unapply(tpe: TypeTree): Option[Tree] =
+        if (!tpe.original.isEmpty) Some(tpe.original)
+        else None
+    }
+
+    def fromRegistry(m: ModuleDef)(registry: Set[(String, Value.ToRegister)]): Option[Set[Tree]] = if (registry.isEmpty) None
     else {
-      registry foreach { s => dones(s._2) }
+      import CODE._
+      registry foreach { s => dones(s._2.name) }
       val registers =
         (for {
           s <- registry
           owner = m.symbol.tpe.typeSymbol
           registerMethod = m.symbol.tpe.member(TermName(s._1))
           member <- m.impl.body
-          DefDef(_, tname, _, List(List(ValDef(_, _, tpe: TypeTree, _)), _*), _, _) <- member
+          DefDef(_, tname, _, List(args, _*), _, _) <- member
           if tname.decoded == s._1
-        } yield (for {
-          AppliedTypeTree(mainTpe, _) <- tpe.original
-          if mainTpe.symbol.decodedName == "Class"
         } yield {
-          val classToRegister = rootMirror.getRequiredClass(s._2)
-          mkRegisterMethodCall(owner, registerMethod, Some(mainTpe), classToRegister)
-        }) match {
-          case List(register) =>
-            register
-          case List() =>
-            val moduleToRegister = rootMirror.getRequiredModule(s._2)
-            mkRegisterMethodCall(owner, registerMethod, None, moduleToRegister)
+          val res: Tree =
+            s._2.tpe match {
+              case RegisteringType.CaseClass =>
+                args match {
+                  case List(ValDef(_, _, tpe: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) =>
+                    val List(ValDef(_, _, tpe: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) = args
+                    val cls = rootMirror.getRequiredClass(s._2.name)
+                    val mod = cls.companion
+                    q"""{
+                  val app = ($mod.apply _).tupled
+                  val unapp = ($mod.unapply _)
+                  $registerMethod(classOf[$cls], app, unapp)
+                  }"""
+                  case _ =>
+                    abort(s"${registerMethod.fullNameString} must have 3 args : (Class[C], T => C, C => Option[T])")
+                }
+              case RegisteringType.ConcreteClass =>
+                args match {
+                  case List(ValDef(_, _, OriginalTypeTree(AppliedTypeTree(mainTpe, _)), _)) if mainTpe.symbol.decodedName == "Class" =>
+                    val cls = rootMirror.getRequiredClass(s._2.name)
+                    q"""$registerMethod(classOf[$cls])"""
+                  case _ =>
+                    abort(s"${registerMethod.fullNameString} must have 1 arg : (Class[C])")
+                }
+              case RegisteringType.Object =>
+                args match {
+                  case List(ValDef(_, _, _, _)) =>
+                    val mod = rootMirror.getRequiredModule(s._2.name)
+                    q"""$registerMethod($mod)"""
+                  case _ =>
+                    abort(s"${registerMethod.fullNameString} must have 1 arg")
+                }
+            }
+          val typed = localTyper.atOwner(owner).typed(res)
+          typed
         })
       Some(registers)
     }
@@ -85,7 +123,7 @@ class RegistryPluginPhase(
           m.impl.body flatMap {
             case d @ DefDef(_, tname, _, _, _, _) =>
               def process(key: Option[String]) = {
-                reporter(key, registries(key))
+                reporter(key, registries(key).map(_.name))
                 registries(key).map(s => tname.decoded -> s)
               }
               val registryAnnot = m.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol).toSeq.flatMap { annot =>
@@ -112,7 +150,12 @@ class RegistryPluginPhase(
             m
         })
         super.transform(r)
-      case _ => super.transform(tree)
+      case _@ PackageDef(_, _) =>
+        super.transform(tree)
+      case _@ Template(_, _, _) =>
+        super.transform(tree)
+      case _ =>
+        tree
     }
   }
 

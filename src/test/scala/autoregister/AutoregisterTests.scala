@@ -51,6 +51,10 @@ object AutoregisterTests extends TestSuite {
         implicit val t = "success.classes"
         s("", "") { Map(None -> Set("C", "D", "F")) }
       }
+      'caseclasses{
+        implicit val t = "success.caseclasses"
+        s("", "") { Map(None -> Set("C", "D", "E", "G", "J.K")) }
+      }
       /*'inheritedregistry{
         implicit val t = "success.inheritedregistry"
         s("", "") { Map(None -> Set("A.register")) }

@@ -13,3 +13,7 @@ trait A
 class B extends A
 
 object C extends B
+
+class D {
+  object E extends B
+}
