@@ -11,6 +11,8 @@ import java.io.ObjectInputStream
 import java.nio.file.Path
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
+import java.io.ObjectStreamClass
+import java.io.InputStream
 
 sealed trait Value {
   def prettyPrint: String
@@ -57,6 +59,17 @@ case class Data(
   private[plugin] var registeredObjects: Set[String] = Set()
 )
 
+class ScalaObjectInputStream(is: InputStream) extends ObjectInputStream(is) {
+  override def resolveClass(desc: ObjectStreamClass): Class[_] = {
+    try {
+      Class.forName(desc.getName, false, getClass.getClassLoader)
+    }
+    catch {
+      case ex: ClassNotFoundException => super.resolveClass(desc)
+    }
+  }
+}
+
 case class Registry() {
 
   private var data: Data = Data()
@@ -66,11 +79,10 @@ case class Registry() {
     target = Some(path)
     if (Files.exists(java.nio.file.Paths.get(path))) {
       val fis = new FileInputStream(path)
-      val ois = new ObjectInputStream(fis)
+      val ois = new ScalaObjectInputStream(fis)
       data = ois.readObject().asInstanceOf[Data]
       ois.close()
       fis.close()
-
     }
   }
 

@@ -3,7 +3,7 @@ organization  := "com.iz2use"
 
 name := "autoregister"
 
-version := "0.0.4"
+version := "0.0.6"
 
 scalaVersion  := "2.11.8"
 
@@ -18,7 +18,8 @@ libraryDependencies ++= Seq(
 
 testFrameworks += new TestFramework("utest.runner.Framework")
 
-unmanagedSourceDirectories in Test <+= baseDirectory(_ / "src" / "test" / "resources")
+// Needed for eclipse or other to see code as scala source but is in conflict for tests
+// unmanagedSourceDirectories in Test <+= baseDirectory(_ / "src" / "test" / "resources")
 
 // Sonatype
 publishArtifact in Test := false

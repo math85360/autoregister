@@ -1,4 +1,4 @@
-# autoregister 0.0.3 [![Build Status][travis-badge]][travis-link]
+# autoregister 0.0.6 [![Build Status][travis-badge]][travis-link]
 ===============
 
 [travis-badge]: https://travis-ci.org/math85360/autoregister.svg
@@ -151,11 +151,11 @@ When you add a new controller or service, you don't need anymore to add a line i
 To use, add the following to your `build.sbt`:
 
 ```scala
-libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.3" % "provided"
+libraryDependencies += "com.iz2use" %% "autoregister" % "0.0.6" % "provided"
 
 autoCompilerPlugins := true
 
-addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.3")
+addCompilerPlugin("com.iz2use" %% "autoregister" % "0.0.6")
 ```
 
 ## Limitations
@@ -182,6 +182,14 @@ object Main {
 
 ## ChangeLog
 =========
+
+0.0.6 - Add support for case classes and pass 3 args to register[R,T](Class[R], (T) => R, (R) => T) where R is a case class and T is a Tuple (or just a type if case class with only 1 arg)
+
+0.0.4 - Add support for concrete classes and pass 1 arg to register[R](Class[R]) where R is a concrete class (not abstract)
+
+0.0.3 - Simplify by processing all annotated ancestors of each class instead of class tree manually constructed
+
+0.0.2 - Support for annotated object or annotated trait inherited by object
 
 ## MIT License
 ===========

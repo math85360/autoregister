@@ -1,18 +1,14 @@
 package autoregister
 
-import scala.reflect.io.VirtualDirectory
-import scala.tools.nsc.Settings
+import java.lang.reflect.InvocationTargetException
 import java.net.URLClassLoader
-import scala.tools.nsc.util.ClassPath
-import scala.tools.nsc.reporters.ConsoleReporter
-import scala.tools.nsc.Global
+
+import scala.reflect.internal.util.{ AbstractFileClassLoader, BatchSourceFile }
+import scala.reflect.io.{ AbstractFile, VirtualDirectory }
+import scala.tools.nsc.{ Global, Settings }
 import scala.tools.nsc.plugins.Plugin
-import utest._, asserts._
-import scala.reflect.io.PlainDirectory
-import scala.reflect.io.Directory
-import scala.reflect.io.PlainFile
-import scala.reflect.io.File
-import java.io.FileInputStream
+import scala.tools.nsc.reporters.ConsoleReporter
+import scala.tools.nsc.util.ClassPath
 
 object TestUtils {
   def getFilePaths(src: String): List[String] = {
@@ -23,13 +19,12 @@ object TestUtils {
 
   def make(path: String)(value: Map[Option[String], Set[String]]) = {
     val src = s"src/test/resources/$path"
-    val sources = getFilePaths(src)
 
-    val vd = new VirtualDirectory("(memory)", None)
+    val target = new VirtualDirectory("(memory)", None)
     lazy val settings = new Settings
     val loader = getClass.getClassLoader.asInstanceOf[URLClassLoader]
     val entries = loader.getURLs map (_.getPath)
-    settings.outputDirs.setSingleOutput(vd)
+    settings.outputDirs.add(AbstractFile.getDirectory("src/test/resources"), target)
 
     val sclpath = entries.map(
       _.replaceAll("scala-compiler.jar", "scala-library.jar")
@@ -51,8 +46,19 @@ object TestUtils {
     }
 
     val run = new compiler.Run()
-    run.compile(sources)
-    if (vd.toList.isEmpty) throw CompilationException()
+    val sources = getFilePaths(src)
+    run.compileSources(sources.map(s => new BatchSourceFile(AbstractFile.getFile(s))))
+    val classLoader = new AbstractFileClassLoader(target, this.getClass.getClassLoader)
+    try {
+      val name = path.replace('/', '.').concat("Test")
+      val cls = classLoader.loadClass(name)
+      val inst = cls.getConstructor().newInstance().asInstanceOf[Any]
+    }
+    catch {
+      case e: ClassNotFoundException    =>
+      case e: InvocationTargetException => throw e.getCause
+    }
+    if (target.toList.isEmpty) throw CompilationException()
 
     assert(value.toSeq.sortBy(_._1) == objectRegistered.toSeq.sortBy(_._1))
   }
