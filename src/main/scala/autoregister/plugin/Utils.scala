@@ -15,7 +15,7 @@ object Utils {
         case Seq() => None
         case Seq(head, tail @ _*) =>
           retain(head) match {
-            case None    => loop(traverser(head) ++ tail)
+            case None => loop(traverser(head) ++ tail)
             case Some(r) => Some((head, r))
           }
       }

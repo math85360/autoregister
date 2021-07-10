@@ -7,10 +7,9 @@ import scala.tools.nsc.transform.Transform
 import Utils._
 
 class InventoryPluginPhase(
-  val global:    Global,
-  addToRegistry: Value => Unit
-)
-    extends PluginComponent with TypingTransformers with Transform { t =>
+  val global: Global,
+  addToRegistry: Value => Unit)
+  extends PluginComponent with TypingTransformers with Transform { t =>
 
   import global._
   import global.definitions._
@@ -59,8 +58,7 @@ class InventoryPluginPhase(
       }
       if (symbol.isModule) {
         reg(_.ancestors, objRegister -> RegisteringType.Object)
-      }
-      else {
+      } else {
         reg(_.ancestors, clsRegister -> RegisteringType.ConcreteClass, cClsRegister -> RegisteringType.CaseClass)
       }
       reg(_ :: Nil, register -> RegisteringType.Object)

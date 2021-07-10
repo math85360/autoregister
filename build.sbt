@@ -1,18 +1,17 @@
-
-organization  := "com.iz2use"
+organization := "com.iz2use"
 
 name := "autoregister"
 
-version := "0.0.6"
+version := "0.0.7"
 
-//scalaVersion  := "2.11.8"
+scalaVersion := "2.13.6"
 
-crossScalaVersions := Seq("2.11.8", "2.12.0")
+//crossScalaVersions := Seq("2.11.8", "2.12.8")
 
 resolvers += Resolver.sonatypeRepo("releases")
 
 libraryDependencies ++= Seq(
-  "com.lihaoyi" %% "utest" % "0.4.4" % "test",
+  "com.lihaoyi" %% "utest" % "0.7.9" % "test",
   "org.scala-lang" % "scala-compiler" % scalaVersion.value % "provided"
 )
 
@@ -24,13 +23,17 @@ testFrameworks += new TestFramework("utest.runner.Framework")
 // Sonatype
 publishArtifact in Test := false
 
-publishTo := {
+publishTo := Some(iz2use.resolver)
+
+/*publishTo := {
   val nexus = "https://oss.sonatype.org/"
   if (isSnapshot.value)
     Some("snapshots" at nexus + "content/repositories/snapshots")
   else
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-}
+}*/
+
+publishMavenStyle := false
 
 pomExtra := (
   <url>https://github.com/math85360/autoregister</url>
@@ -51,4 +54,4 @@ pomExtra := (
         <url>https://github.com/math85360</url>
       </developer>
     </developers>
-  )
+)

@@ -7,9 +7,8 @@ import scala.tools.nsc.transform.Transform
 
 class CheckPluginPhase(
   val global: Global,
-  rest:       () => Set[String]
-)
-    extends PluginComponent with TypingTransformers with Transform { t =>
+  rest: () => Set[String])
+  extends PluginComponent with TypingTransformers with Transform { t =>
 
   import global._
   import global.definitions._

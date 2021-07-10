@@ -10,11 +10,13 @@ import Utils._
 
 class RegistryPluginPhase(
   val global: Global,
-  regs:       () => Map[Option[String], Set[Value.ToRegister]],
-  dones:      String => Unit,
-  reporter:   (Option[String], Set[String]) => Unit
-)
-    extends PluginComponent with TypingTransformers with Transform with TreeDSL { t =>
+  regs: () => Map[Option[String], Set[Value.ToRegister]],
+  dones: String => Unit,
+  reporter: (Option[String], Set[String]) => Unit)
+  extends PluginComponent
+  with TypingTransformers
+  with Transform
+  with TreeDSL { t =>
 
   import global._
   import global.definitions._
@@ -29,7 +31,8 @@ class RegistryPluginPhase(
     new RegistryTransformer(unit, regs())
   }
 
-  class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[Value.ToRegister]]) extends TypingTransformer(unit) {
+  class RegistryTransformer(unit: CompilationUnit, registries: Map[Option[String], Set[Value.ToRegister]])
+    extends TypingTransformer(unit) {
 
     sealed trait CallRegisterable[T] {
       def transform(in: T, registeringType: Option[Tree]): Tree
@@ -65,28 +68,29 @@ class RegistryPluginPhase(
         else None
     }
 
-    def fromRegistry(m: ModuleDef)(registry: Set[(String, Value.ToRegister)]): Option[Set[Tree]] = if (registry.isEmpty) None
-    else {
-      import CODE._
-      registry foreach { s => dones(s._2.name) }
-      val registers =
-        (for {
-          s <- registry
-          owner = m.symbol.tpe.typeSymbol
-          registerMethod = m.symbol.tpe.member(TermName(s._1))
-          member <- m.impl.body
-          DefDef(_, tname, _, List(args, _*), _, _) <- member
-          if tname.decoded == s._1
-        } yield {
-          val res: Tree =
-            s._2.tpe match {
-              case RegisteringType.CaseClass =>
-                args match {
-                  case List(ValDef(_, _, _: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) =>
-                    val List(ValDef(_, _, _: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) = args
-                    val cls = rootMirror.getRequiredClass(s._2.name)
-                    val mod = cls.companionModule
-                    /*val fields = cls.tpe.decls.collect {
+    def fromRegistry(m: ModuleDef)(registry: Set[(String, Value.ToRegister)]): Option[Set[Tree]] =
+      if (registry.isEmpty) None
+      else {
+        import CODE._
+        registry foreach { s => dones(s._2.name) }
+        val registers =
+          (for {
+            s <- registry
+            owner = m.symbol.tpe.typeSymbol
+            registerMethod = m.symbol.tpe.member(TermName(s._1))
+            member <- m.impl.body
+            DefDef(_, tname, _, List(args, _*), _, _) <- member
+            if tname.decoded == s._1
+          } yield {
+            val res: Tree =
+              s._2.tpe match {
+                case RegisteringType.CaseClass =>
+                  args match {
+                    case List(ValDef(_, _, _: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) =>
+                      val List(ValDef(_, _, _: TypeTree, _), ValDef(_, _, _, _), ValDef(_, _, _, _)) = args
+                      val cls = rootMirror.getRequiredClass(s._2.name)
+                      val mod = cls.companionModule
+                      /*val fields = cls.tpe.decls.collect {
                       case s: TermSymbol if s.isVal && s.isCaseAccessor =>
                         (TermName(treeBuilder.fresh.newName(s.name.toString.trim)), s.typeSignature)
                     }
@@ -109,91 +113,96 @@ class RegistryPluginPhase(
                             $registerMethod(classOf[$cls], ($mod.apply _).tupled, ($mod.unapply _).andThen(_.get))
                           """
                     }*/
-                    //val tpe = mod
-                    val tpes = cls.tpe.decls.collect {
-                      case s: TermSymbol if s.isVal && s.isCaseAccessor => s.typeSignature
-                    }
-                    val fname = TermName(s"fromTuple${cls.fullNameAsName('_')}")
-                    val tname = TermName(s"toTuple${cls.fullNameAsName('_')}")
-                    tpes match {
-                      case Nil =>
-                        /*val $fname: (Unit) => $cls = (_:Unit) => $mod.apply()
+                      //val tpe = mod
+                      val tpes = cls.tpe.decls.collect {
+                        case s: TermSymbol if s.isVal && s.isCaseAccessor => s.typeSignature
+                      }
+                      val fname = TermName(s"fromTuple${cls.fullNameAsName('_')}")
+                      val tname = TermName(s"toTuple${cls.fullNameAsName('_')}")
+                      tpes match {
+                        case Nil =>
+                          /*val $fname: (Unit) => $cls = (_:Unit) => $mod.apply()
                           val $tname: ($cls) => Unit = _ => ()*/
-                        q"""
+                          q"""
                           
                           $registerMethod(classOf[$cls], (_:Unit) => $mod.apply(), (_:$cls) => ())
                           """
-                      //q""" () """
-                      case head :: Nil =>
-                        /*q"""val $fname: ($head) => $cls = ($mod.apply _)""",
+                        //q""" () """
+                        case head :: Nil =>
+                          /*q"""val $fname: ($head) => $cls = ($mod.apply _)""",
                           q"""val $tname: ($cls) => (..$tpes) = ($mod.unapply
                           _).andThen(_.get)""",*/
-                        q"""$registerMethod(classOf[$cls], ($mod.apply _), ($mod.unapply _).andThen(_.get))"""
-                      //q""" () """
-                      case _ =>
-                        /*q"""val $fname: ((..$tpes)) => $cls = ($mod.apply _).tupled""",
+                          q"""$registerMethod(classOf[$cls], ($mod.apply _), ($mod.unapply _).andThen(_.get))"""
+                        //q""" () """
+                        case _ =>
+                          /*q"""val $fname: ((..$tpes)) => $cls = ($mod.apply _).tupled""",
                           q"""val $tname: ($cls) => (..$tpes) = """,*/
-                        q"""$registerMethod(classOf[$cls], ($mod.apply _).tupled, ($mod.unapply _).andThen(_.get))"""
-                      //
-                    }
-                  //q""" val $fname : $cls = null """
-                  //println(defs.mkString("\n"))
-                  //Block(defs: _*)
-                  //q""" $registerMethod(classOf[$cls], $mod.fromTuple, $mod.toTuple) """
-                  case _ =>
-                    abort(s"${registerMethod.fullNameString} must have 3 args : (Class[C], T => C, C => T)")
-                }
-              case RegisteringType.ConcreteClass =>
-                args match {
-                  case List(ValDef(_, _, OriginalTypeTree(AppliedTypeTree(mainTpe, _)), _)) if mainTpe.symbol.decodedName == "Class" =>
-                    val cls = rootMirror.getRequiredClass(s._2.name)
-                    q"""$registerMethod(classOf[$cls])"""
-                  case _ =>
-                    abort(s"${registerMethod.fullNameString} must have 1 arg : (Class[C])")
-                }
-              case RegisteringType.Object =>
-                args match {
-                  case List(ValDef(_, _, _, _)) =>
-                    val mod = rootMirror.getRequiredModule(s._2.name)
-                    q"""$registerMethod($mod)"""
-                  case _ =>
-                    abort(s"${registerMethod.fullNameString} must have 1 arg")
-                }
-            }
-          val typed = localTyper.atOwner(m.impl.symbol).typed(res)
-          typed
-        })
-      Some(registers)
-    }
+                          q"""$registerMethod(classOf[$cls], ($mod.apply _).tupled, ($mod.unapply _).andThen(_.get))"""
+                        //
+                      }
+                    //q""" val $fname : $cls = null """
+                    //println(defs.mkString("\n"))
+                    //Block(defs: _*)
+                    //q""" $registerMethod(classOf[$cls], $mod.fromTuple, $mod.toTuple) """
+                    case _ =>
+                      abort(s"${registerMethod.fullNameString} must have 3 args : (Class[C], T => C, C => T)")
+                  }
+                case RegisteringType.ConcreteClass =>
+                  args match {
+                    case List(ValDef(_, _, OriginalTypeTree(AppliedTypeTree(mainTpe, _)), _))
+                        if mainTpe.symbol.decodedName == "Class" =>
+                      val cls = rootMirror.getRequiredClass(s._2.name)
+                      q"""$registerMethod(classOf[$cls])"""
+                    case _ =>
+                      abort(s"${registerMethod.fullNameString} must have 1 arg : (Class[C])")
+                  }
+                case RegisteringType.Object =>
+                  args match {
+                    case List(ValDef(_, _, _, _)) =>
+                      val mod = rootMirror.getRequiredModule(s._2.name)
+                      q"""$registerMethod($mod)"""
+                    case _ =>
+                      abort(s"${registerMethod.fullNameString} must have 1 arg")
+                  }
+              }
+            val typed = localTyper.atOwner(m.impl.symbol).typed(res)
+            typed
+          })
+        Some(registers)
+      }
 
     override def transform(tree: Tree): Tree = tree match {
       case m @ ModuleDef(_, _, _) =>
         val r = (fromRegistry(m) {
-          m.impl.body flatMap {
+          m.impl.body.flatMap {
             case d @ DefDef(_, tname, _, _, _, _) =>
               def process(key: Option[String]) = {
                 reporter(key, registries(key).map(_.name))
                 registries(key).map(s => tname.decoded -> s)
               }
-              val registryAnnot = m.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol).toSeq.flatMap { annot =>
-                process(annot.args.headOption collect {
-                  case Literal(Constant(key: String)) => key
-                })
-              }
-              val registryOpt = if (tname.decoded == "register") {
-                process(None)
-              }
-              else {
-                Set()
-              }
+              val registryAnnot =
+                m.symbol.getAnnotation(typeOf[autoregister.annotations.Registry].typeSymbol).toSeq.flatMap { annot =>
+                  process(annot.args.headOption collect {
+                    case Literal(Constant(key: String)) => key
+                  })
+                }
+              val registryOpt =
+                if (tname.decoded == "register") {
+                  process(None)
+                } else {
+                  Set()
+                }
               val meth = process(Some(s"${m.symbol.fullNameString}.${tname.decoded}"))
               (meth ++ registryAnnot ++ registryOpt)
             case _ =>
               Nil
-          } toSet
+          }.toSet
         } match {
           case Some(registers) if registers.nonEmpty =>
-            val z = treeCopy.ModuleDef(m, m.mods, m.name,
+            val z = treeCopy.ModuleDef(
+              m,
+              m.mods,
+              m.name,
               treeCopy.Template(m.impl, m.impl.parents, m.impl.self, m.impl.body.map(transform) ++ registers))
             //println(registers.mkString("\n"))
             //println(showCode(z))
@@ -204,9 +213,9 @@ class RegistryPluginPhase(
             m
         })
         r
-      case _@ PackageDef(_, _) =>
+      case _ @PackageDef(_, _) =>
         super.transform(tree)
-      case _@ Template(_, _, _) =>
+      case _ @Template(_, _, _) =>
         super.transform(tree)
       case _ =>
         tree

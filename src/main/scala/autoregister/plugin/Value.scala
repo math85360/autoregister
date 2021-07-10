@@ -56,15 +56,13 @@ case class Data(
   //private[plugin] var registeredSuper:   Seq[RegisterValue]                         = Seq(),
   //private[plugin] var extended:          Map[String, Seq[Value.Extends]]            = Map().withDefaultValue(Seq()),
   //private[plugin] var concreteObjects:   Map[String, Seq[Value.ConcreteObject]] = Map().withDefaultValue(Seq()),
-  private[plugin] var registeredObjects: Set[String] = Set()
-)
+  private[plugin] var registeredObjects: Set[String] = Set())
 
 class ScalaObjectInputStream(is: InputStream) extends ObjectInputStream(is) {
   override def resolveClass(desc: ObjectStreamClass): Class[_] = {
     try {
       Class.forName(desc.getName, false, getClass.getClassLoader)
-    }
-    catch {
+    } catch {
       case ex: ClassNotFoundException => super.resolveClass(desc)
     }
   }

@@ -19,11 +19,10 @@ class RuntimePlugin(global: Global) extends TestPlugin(global, RuntimeSettings.r
 }
 
 class TestPlugin(
-  val global:   Global,
-  val registry: Registry                              = Registry(),
-  reporter:     (Option[String], Set[String]) => Unit = { case _ => () }
-)
-    extends Plugin {
+  val global: Global,
+  val registry: Registry = Registry(),
+  reporter: (Option[String], Set[String]) => Unit = { case _ => () })
+  extends Plugin {
 
   val name = "autoregister"
 
@@ -32,8 +31,7 @@ class TestPlugin(
   val components = List[PluginComponent](
     new InventoryPluginPhase(global, registry.+=),
     new RegistryPluginPhase(global, () => registry.result, registry.registered, reporter),
-    new CheckPluginPhase(global, () => { registry.save; registry.checkRest })
-  )
+    new CheckPluginPhase(global, () => { registry.save; registry.checkRest }))
 
   case class ThrowError(cu: global.CompilationUnit, pos: global.Position, msg: String)
 }
